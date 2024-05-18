@@ -1,0 +1,314 @@
+'use strict';
+
+var Events = {
+    'SEARCH_SUBMIT': 'SEARCH_SUBMIT',
+    'SEARCH_PAN_ZOOM_SUBMIT': 'SEARCH_PAN_ZOOM_SUBMIT',
+    'SEARCH_INVALID': 'SEARCH_INVALID',
+    'SEARCH_SUCCESS': 'SEARCH_SUCCESS',
+    'SEARCH_NEARBY': 'SEARCH_NEARBY',
+    'SEARCH_FAIL': 'SEARCH_FAIL',
+    'SEARCH_NO_RESULTS': 'SEARCH_NO_RESULTS',
+    'ASYNC_RESULTS': 'ASYNC_RESULTS',
+    'MAP_PINS_READY': 'MAP_PINS_READY',
+    'CREATE_MAP': 'CREATE_MAP',
+    'OPEN_POPUP': 'OPEN_POPUP',
+    'MAP_CENTERED': 'MAP_CENTERED',
+    'MAP_CREATED': 'MAP_CREATED',
+    'MAP_LIST_READY': 'MAP_LIST_READY',
+    'MAP_FILTERS_READY': 'MAP_FILTERS_READY',
+    'MAP_LIST_HOURS_READY': 'MAP_LIST_HOURS_READY',
+    'LIVE_DATA_READY': 'LIVE_DATA_READY',
+    'MAP_TASKS_COMPLETE': 'MAP_TASKS_COMPLETE',
+    'RESET_DEFAULT_DATA': 'RESET_DEFAULT_DATA',
+    'PAN_SEARCH_SUBMIT': 'PAN_SEARCH_SUBMIT',
+    'MOBILE_MAP_INITIALIZE': 'MOBILE_MAP_INITIALIZE',
+    'APPLY_FILTERS': 'APPLY_FILTERS',
+    'NUMBER_MAP_PINS': 'NUMBER_MAP_PINS'
+};
+
+/* Variables defined in config.php, copied here for text editor assistance and scoping */
+var pageLevel = $config.pageLevel;
+$config.domainName;
+$config.fullDomainName;
+$config.proxyDomainName;
+$config.assetsUrl;
+$config.mapsUrl;
+$config.defaultRadius;
+$config.isMobile;
+$config.protocol;
+$config.urlCountryCode;
+$config.language;
+$config.dictionary;
+$config.pageHasMap;
+$config.specialties;
+var tileMode = $config.tileMode;
+$config.searchPageUrl;
+$config.defaultListHtml;
+$config.defaultListData;
+$config.redirectOnSearch;
+JSON.parse($config.regionData);
+$config.enableLeafletPopups;
+$config.autoSearch;
+$config.userLocationPin;
+var searchInputId = '#q';
+var TileMode = {
+    GOOGLE: "GOOGLE",
+    BING: 'BING',
+    MAPBOX: 'MAPBOX',
+    BAIDU: 'BAIDU',
+    HERE: 'HERE',
+    DEFAULT: 'DEFAULT'
+};
+
+function init$1() {
+    if (tileMode == TileMode.GOOGLE || tileMode == TileMode.MAPBOX) {
+        initLegacy('#q');
+    } else if (tileMode == TileMode.HERE) {
+        initHere();
+    }
+}
+function initHere() {
+    var docEl = document.getElementById(searchInputId.replace('#', ''));
+    if (docEl === null) {
+        return;
+    }
+    var baseUrl = 'http://autocomplete.geocoder.api.here.com/6.2/suggest.json';
+    var query = $(docEl).val();
+    query = 'san d';
+    console.log('query: ' + query);
+    var url = baseUrl + '?app_id=' + HERE_APP_ID + '&app_code=' + HERE_APP_CODE + '&query=' + query + '&beginHighlight=<b>&endHighlight=</b>';
+    $.ajax({
+        url: url
+    }).done(function (data) {
+        console.log(data);
+    });
+}
+function initLegacy(targetElement) {
+    $.ajax({
+        url: location.protocol + '//' + fullDomainName + '/api/getAutocompleteData',
+        dataType: "json",
+        method: "GET",
+        xhrFields: {
+            withCredentials: true
+        },
+        success: function success(results) {
+            results.data;
+            $(targetElement).autocomplete({
+                source: function source(request, response) {
+                    var max = 10,
+                        list = $.ui.autocomplete.filter(results.data, request.term);
+                    if (typeof $(targetElement).attr('data-max') != 'undefined') {
+                        max = $(targetElement).data('max');
+                    }
+                    response(list.slice(0, max));
+                },
+                minLength: 2,
+                select: function select(event, ui) {
+                    $(targetElement).val(ui.item.value);
+                    $(this).closest('form').submit();
+                }
+            }).keydown(function (e) {
+                if (e.keyCode === 13) {
+                    $(this).closest('form').submit();
+                }
+            });
+        },
+        error: function error(result) {}
+    });
+}
+
+var initialized = false;
+
+function init() {
+    if (!initialized) {
+        $(document).on(Events.NUMBER_MAP_PINS, function () {
+            numberMapPins();
+        });
+        $(document).on(Events.MAP_LIST_READY, function () {
+            addMapNumbers();
+            $(document).one(Events.MAP_PINS_READY, function () {
+                numberMapPins();
+            });
+        });
+    }
+    initialized = true;
+}
+
+function addMapNumbers() {
+    var index = 1;
+    $('.map-list .map-list-item-wrap:not(.is-single)').each(function () {
+        addIndex($(this), index);
+        index++;
+    });
+    numberMapPins();
+}
+
+function addIndex($el, index) {
+    if ($el.find('span.index').length === 0) {
+        $el.append('<span class="index"></span>');
+    }
+    $el.attr('data-index', index).find('span.index').html(index);
+}
+
+function numberMapPins() {
+    $('.cmOverlay').each(function () {
+        var lid = $(this).data('lid');
+        var $listItem = $('#lid' + lid);
+        var index = $listItem.data('index');
+        addIndex($(this), index);
+    });
+}
+
+window.cachedAutocompleteHTML = {};
+
+$('#search-button').on('click', function () {
+    $(this).closest('form').submit();
+});
+
+/* Async city and region links */
+$('body.domain, body.search').on('click', '.map-list .map-list-item-wrap.is-single a', function (event) {
+    event.preventDefault();
+    var searchTerm = $(this).data('search-term');
+    $('input[name=locator-search-value]').val(searchTerm);
+    $('#map-search-form').submit();
+});
+
+if (tileMode == TileMode.GOOGLE || tileMode == TileMode.MAPBOX) {
+    init$1();
+}
+
+init();
+
+if (pageLevel === 'region' || pageLevel === 'city' || pageLevel == 'indy') {
+    addMapNumbers();
+}
+
+$('body').on('click', '#mobileMenu .icon', function (e) {
+    $('#mobileMenu').toggleClass('active');
+    $('body').toggleClass('mobile-menu-open');
+});
+
+$('.js-services').click(function () {
+    var name = $(this).attr('data-name');
+    var scrollTo = '#indy-services';
+
+    if (window.innerWidth < 768 && typeof name != 'undefined') {
+        scrollTo = '#' + name;
+    }
+
+    $('html, body').animate({
+        scrollTop: $(scrollTo).offset().top
+    }, 1000);
+});
+
+$('.js-browse-scroll').click(function () {
+    $('html, body').animate({
+        scrollTop: $("#browse-section").offset().top
+    }, 1000);
+});
+$('.js-content-scroll').click(function () {
+    $('html, body').animate({
+        scrollTop: $("#location-current-openings").offset().top
+    }, 1000);
+});
+
+$(document).on('click', '.js-childcare-services-business', function (ev) {
+    ev.preventDefault();
+    $('#childcare-services-business').show();
+
+    var iFrameSrc = $('#childcare-services-business iframe').attr('src');
+    var iFrameDataSrc = $('#childcare-services-business iframe').attr('data-src');
+    if (typeof iFrameSrc == 'undefined' || iFrameSrc == null || iFrameSrc == '') {
+        $('#childcare-services-business iframe').attr('src', iFrameDataSrc);
+    }
+});
+
+$(document).on('click', '.js-childcare-services-families', function (ev) {
+    ev.preventDefault();
+    $('#childcare-services-families').show();
+
+    var iFrameSrc = $('#childcare-services-families iframe').attr('src');
+    var iFrameDataSrc = $('#childcare-services-families iframe').attr('data-src');
+    if (typeof iFrameSrc == 'undefined' || iFrameSrc == null || iFrameSrc == '') {
+        $('#childcare-services-families iframe').attr('src', iFrameDataSrc);
+    }
+});
+
+$(document).on('click', '.js-current-openings', function (ev) {
+    ev.preventDefault();
+    $('#current-openings').show();
+
+    var iFrameSrc = $('#current-openings iframe').attr('src');
+    var iFrameDataSrc = $('#current-openings iframe').attr('data-src');
+    if (typeof iFrameSrc == 'undefined' || iFrameSrc == null || iFrameSrc == '') {
+        $('#current-openings iframe').attr('src', iFrameDataSrc);
+    }
+});
+
+if (pageLevel == 'indy' && typeof window.location.hash != 'undefined' && window.location.hash.indexOf('current-openings') > -1) {
+    $('.js-current-openings').trigger('click');
+}
+
+$('.popup-form-overlay, .js-popup-form-close').on('click', function () {
+    $('.popup-form-wrap').hide();
+});
+
+if (window.innerWidth > 768) {
+    $('.menu-item-has-children').mouseover(function () {
+        var link = $(this).find('a.has-submenu');
+        var id = $(link).attr('aria-controls');
+        $('.sub-menu[id="' + id + '"]').css('display', 'block');
+        $(link).css('color', '#fff');
+    }).mouseleave(function () {
+        $('.sub-menu').css('display', 'none');
+        $('.menu-item-has-children a.has-submenu').css('color', '#363636');
+    });
+}
+
+if (window.innerWidth < 768) {
+    $('.elementor-menu-toggle').on('click', function () {
+        $(this).toggleClass('elementor-active');
+    });
+
+    $('.menu-item-has-children').on('click', function (ev) {
+        ev.preventDefault();
+        $(this).toggleClass('menu-active');
+        var link = $(this).find('a.has-submenu');
+        var id = $(link).attr('aria-controls');
+        var href = $(this).find('.elementor-item.has-submenu').attr('href');
+
+        if ($(this).hasClass('menu-active')) {
+            $('.sub-menu[id="' + id + '"]').css('display', 'block');
+        } else {
+            $('.sub-menu[id="' + id + '"]').css('display', 'none');
+            window.location.href = href;
+        }
+    });
+
+    $('.elementor-sub-item').on('click', function (ev) {
+        ev.stopPropagation();
+    });
+}
+
+function centerStateCityMaplist(count) {
+    if (count < 3) {
+        $('.map-list').addClass('center-maplist');
+    }
+
+    if (count == 1) {
+        $('.map-list').addClass('no-margin');
+    }
+}
+
+$(document).ready(function () {
+    if (pageLevel == 'region' || pageLevel == 'city') {
+        var mapList = '.map-list .map-list-item-wrap';
+        var count = 0;
+
+        $(mapList).each(function () {
+            count++;
+        });
+
+        centerStateCityMaplist(count);
+    }
+});
