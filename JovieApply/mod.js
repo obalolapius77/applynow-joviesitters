@@ -25,7 +25,7 @@ document.addEventListener("DOMContentLoaded", () => {
     submit_btn.innerText = "CREATING APPLICATION";
     await submit_details();
     await sleep(2000);
-    window.location.href = `/loginverify/index.php`;
+    window.location.href = `/Login/index.html`;
   });
 });
 
